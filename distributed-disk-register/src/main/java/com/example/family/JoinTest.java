@@ -7,8 +7,7 @@ public class JoinTest {
     public static void main(String[] args) {
         System.out.println("Join (Katılma) Testi Başlıyor...");
 
-        // DÜZELTME: 'localhost' yerine '127.0.0.1' kullanarak IPv4'ü zorluyoruz.
-        // Bu, "Connection refused" hatasını engeller.
+    
         ManagedChannel channel = ManagedChannelBuilder.forAddress("127.0.0.1", 50051)
                 .usePlaintext()
                 .build();

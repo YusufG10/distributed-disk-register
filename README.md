@@ -1,235 +1,71 @@
-Distributed-Disk-Registery (gRPC + TCP)
-=======================================
+HaToKuSe: Hata-Tolere Kuyruk Servisi (Dağıtık Abonelik Sistemi)
+Bu proje, Java ve gRPC teknolojileri kullanılarak geliştirilmiş; hata toleransı yüksek, dağıtık bir mesaj kayıt ve abonelik sistemidir. Sistem, ödev kapsamında tanımlanan HaToKuSe ilkel protokolü üzerine inşa edilmiştir.
 
----
+🚀 Mimari Özellikler
+Lider-Üye Yapısı: Sistemde bir sunucu "Lider" (varsayılan port 50051) olarak atanır; diğer sunucular "Aile Üyeleri" olarak lidere bağlanır.
 
+Dinamik Üyelik: n sayıda üye sisteme çalışma zamanında dinamik olarak katılabilir veya sistemden ayrılabilir.
 
-# gRPC + Protobuf + TCP Hybrid Distributed Server
+Metadata Yönetimi: Lider, hangi mesaj kimliklerinin (message_id) hangi üyelerde saklandığına dair bir Metadata Map tutar.
 
-Bu proje, birden fazla sunucunun dağıtık bir küme (“family”) oluşturduğu, **gRPC + Protobuf** ile kendi aralarında haberleştiği ve aynı zamanda **lider üye (cluster gateway)** üzerinden dış dünyadan gelen **TCP text mesajlarını** tüm üyelere broadcast ettiği hibrit bir mimari örneğidir.
+Hata Toleransı (Replikasyon): Gelen her mesaj, tolerance.conf dosyasında belirtilen değer kadar farklı üyeye kopyalanır (replikasyon).
 
-Sistem Programlama, Dağıtık Sistemler veya gRPC uygulama taslağı olarak kullanınız.
+Veri Kurtarma: Eğer bir mesajın saklandığı sunucu çökerse (crash), Lider otomatik olarak mesajın bir kopyasının bulunduğu diğer canlı üyeden veriyi çekerek istemciye sunar.
 
----
+🛠️ Kullanılan Teknolojiler
+Programlama Dili: Java
 
-##  Özellikler
+Haberleşme: gRPC & Protocol Buffers (HaToKuSe protokolü)
 
-### ✔ Otomatik Dağıtık Üye Keşfi
+Bağımlılık Yönetimi: Maven
 
-Her yeni Üye:
+Yapılandırma: tolerance.conf üzerinden dinamik tolerans ayarı
 
-* 5555’ten başlayarak boş bir port bulur
-* Kendinden önce gelen üyelere gRPC katılma (Join) isteği gönderir
-* Aile (Family) listesine otomatik dahil olur.
+📊 İzleme ve Raporlama
+Periyodik Raporlar: Her sunucu (Lider ve Üyeler), her 10 saniyede bir kendi diskindeki mesaj sayısını konsola raporlar.
 
-### ✔ Lider Üye (Cluster Gateway)
+Heartbeat Mekanizması: Üyeler, dosya sayılarını Lider sunucuya periyodik olarak iletir. Lider, tüm kümenin güncel durumunu (hangi üye ne kadar mesaj tutuyor) raporlar.
 
-İlk başlayan Üye (port 5555) otomatik olarak **lider** kabul edilir ve:
+⚙️ Kurulum ve Çalıştırma
+1. Projeyi Derleme
+Maven kullanarak gerekli gRPC sınıflarını üretin:
 
-* TCP port **6666** üzerinden dış dünyadan text mesajı dinler
-* Her mesajı Protobuf formatına dönüştürür
-* Tüm diğer üyelere gRPC üzerinden gönderir
+Bash
 
-### ✔ gRPC + Protobuf İçi Mesajlaşma
+mvn clean install
+2. tolerance.conf Yapılandırması
+Proje ana dizininde tolerance.conf dosyasına replikasyon sayısını yazın:
 
-Üyeler kendi aralarında sadece **protobuf message** ile haberleşir:
+Plaintext
 
-```proto
-message ChatMessage {
-  string text = 1;
-  string fromHost = 2;
-  int32 fromPort = 3;
-  int64 timestamp = 4;
-}
-```
+tolerance=2
+3. Çalıştırma Sırası
+Lider Sunucu: NodeMain sınıfını parametresiz çalıştırın (Varsayılan Port: 50051).
 
-### ✔ Aile (Family) Senkronizasyonu
+Üye Sunucular: NodeMain sınıfını farklı port parametreleriyle çalıştırın (Örn: NodeMain 50052, NodeMain 50053).
 
-Her üye, düzenli olarak diğer aile üyeleri listesini ekrana basar:
+Ağa Katılım: JoinTest sınıfını çalıştırarak üyelerin Lider'e kayıt olmasını sağlayın.
 
-```
-======================================
-Family at 127.0.0.1:5557 (me)
-Time: 2025-11-13T21:05:00
-Members:
- - 127.0.0.1:5555
- - 127.0.0.1:5556
- - 127.0.0.1:5557 (me)
-======================================
-```
+İstemci: InteractiveClient sınıfını başlatın.
 
-### ✔ Üye Düşmesi (Failover)
+🎮 İstemci Komutları (HaToKuSe Protokolü)
+İstemci terminal üzerinden şu metin tabanlı komutları destekler:
 
-Health-check mekanizması ile kopan (offline) üyeler aile listesinden çıkarılır.
+Veri Kaydetme: SET <message_id> <message_content>
 
----
+Örnek: SET msg101 Merhaba_Dunya
 
-## 📁 Proje Yapısı
+Veri Okuma: GET <message_id>
 
-```
-distributed-disk-register/
-│
-├── pom.xml
-├── README.md
-├── src
-│   └── main
-│       ├── java/com/example/family/
-│       │       ├── NodeMain.java
-│       │       ├── NodeRegistry.java
-│       │       └── FamilyServiceImpl.java
-│       │
-│       └── proto/
-│               └── family.proto
-```
+Örnek: GET msg101
 
-## 👨🏻‍💻 Kodlama
+Çıkış: cik
 
-Yüksek seviyeli dillerde yazılım geliştirme işlemi basit bir editörden ziyade gelişmiş bir IDE (Integrated Development Environment) ile yapılması tavsiye edilmektedir. JVM ailesi dillerinin en çok tercih edilen [IntelliJ IDEA](https://www.jetbrains.com/idea/) aracını edu' lu mail adresinizle öğrenci lisanslı olarak indirip kullanabilirsiniz. Bu projeyi diskinize klonladıktan sonra IDEA' yı açıp, üst menüden _Open_ seçeneği projenin _pom.xml_ dosyasını seçtiğinizde projeniz açılacaktır. 
+🛡️ Hata Toleransı Test Senaryosu
+SET komutu ile bir mesaj kaydedilir.
 
+Liderin diskindeki dosya manuel olarak silinir.
 
----
+GET komutu ile aynı mesaj istenir.
 
-## 🔧 Derleme
-
-Proje dizininde (pom.xml in olduğu):
-
-```bash
-mvn clean compile
-```
-
-Bu komut:
-
-* `family.proto` → gRPC Java sınıflarını üretir
-* Tüm server kodlarını derler
-
----
-
-## ▶️ Çalıştırma
-
-Her bir terminal yeni bir üye demektir.
-
-### **Terminal 1 – Lider Üye**
-
-```bash
-mvn exec:java -Dexec.mainClass=com.example.family.NodeMain
-```
-
-Çıktı:
-
-```
-Node started on 127.0.0.1:5555
-Leader listening for text on TCP 127.0.0.1:6666
-...
-```
-
-![Sistem Başlatma](https://github.com/ismailhakkituran/distributed-disk-register/blob/main/Distributed%20System%20Start-start.png)
-
-
-### **Terminal 2, 3, 4… – Diğer Üyeler**
-
-Her yeni terminal:
-
-```bash
-mvn exec:java -Dexec.mainClass=com.example.family.NodeMain
-```
-
-Üyeler 5556, 5557, 5558… portlarını otomatik bulur
-ve aileye katılır.
-
----
-![Üyelerin aileye katılması](https://github.com/ismailhakkituran/distributed-disk-register/blob/main/Distributed%20System%20Start-family.png)
-
-## Mesaj Gönderme (TCP → Lider Üye)
-
-Lider Üye, dış dünyadan gelen text’i 6666 portunda bekler.
-
-Yeni bir terminal aç:
-
-```bash
-nc 127.0.0.1 6666
-```
-
-Veya:
-
-```bash
-telnet 127.0.0.1 6666
-```
-
-Mesaj yaz:
-
-```
-Merhaba distributed world!
-```
-
-![Sistem Başlatma](https://github.com/ismailhakkituran/distributed-disk-register/blob/main/Distributed%20System%20Start-telnet.png)
-
-###  Sonuç
-
-Bu mesaj protobuf mesajına çevrilip tüm üyelere gider.
-
----
-
-### Diğer Üyelerdeki örnek çıktı:
-
-```
-💬 Incoming message:
-  From: 127.0.0.1:5555
-  Text: Merhaba distributed world!
-  Timestamp: 1731512345678
---------------------------------------
-```
-
----
-
-##  Çalışma Prensibi
-
-###  1. Dağıtık Üye Keşfi
-
-Yeni Üye, kendinden önceki portları gRPC ile yoklar:
-
-```
-5555 → varsa Join
-5556 → varsa Join
-...
-```
-
-###  2. Lider Üye (Port 5555)
-
-Lider Üye:
-
-* TCP 6666’dan text alır,
-* Protobuf `ChatMessage` nesnesine çevirir,
-* Tüm kardeş üyelere gRPC RPC gönderir.
-
-###  3. Family Senkronizasyonu
-
-Her üye 10 saniyede bir kendi ailesini ekrana basar.
-
----
-
-##  Ödev / Bundan Sonra Yapılacaklar
-
-Öğrenciler:
-
-* Üye düşme tespiti (heartbeat)
-* Leader election
-* gRPC streaming ile real-time chat
-* Redis-backed cluster membership
-* Broadcast queue implementasyonu
-* TCP’den gelen mesajların loglanması
-* Çoklu lider senaryosu & conflict resolution
-
-gibi özellikler ekleyebilir.
-
----
-
-## Lisans
-
-MIT — Eğitim ve araştırma amaçlı serbestçe kullanılabilir.
-
----
-
-##  Katkı
-
-Pull request’e her zaman açığız!
-Yeni özellik önerileri için issue açabilirsiniz.
+Lider, mesajın kendi diskinde olmadığını fark eder, Metadata tablosundan mesajın kopyasının olduğu 50052 portuna sorar ve veriyi başarıyla getirir.

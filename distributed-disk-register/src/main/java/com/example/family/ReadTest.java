@@ -17,7 +17,7 @@ public class ReadTest {
         try {
             FamilyServiceGrpc.FamilyServiceBlockingStub stub = FamilyServiceGrpc.newBlockingStub(channel);
 
-            // "test_mesaji_1" kimlikli veriyi isteyelim
+            
             String messageId = "test_mesaji_1";
 
             GetRequest request = GetRequest.newBuilder()

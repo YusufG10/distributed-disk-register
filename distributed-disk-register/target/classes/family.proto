@@ -1,32 +1,62 @@
 syntax = "proto3";
 
-package family;
-
 option java_multiple_files = true;
-option java_package = "family";
+option java_package = "com.example.family";
 option java_outer_classname = "FamilyProto";
+
+service FamilyService {
+  // SET <id> <message> işlemi
+  rpc Store (StoreRequest) returns (StoreResponse);
+
+  // Üyelerin ağa katılması (Join)
+  rpc Join (JoinRequest) returns (JoinResponse);
+
+  // GET <id> işlemi
+  rpc Get (GetRequest) returns (GetResponse);
+
+  // Üyelerin Lider'e durum raporu (Heartbeat)
+  rpc Heartbeat (HeartbeatRequest) returns (HeartbeatResponse);
+}
+
+message StoreRequest {
+  string message_id = 1;
+  string content = 2;
+  bool is_replication = 3;
+}
+
+message StoreResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetRequest {
+  string message_id = 1;
+}
+
+message GetResponse {
+  bool found = 1;
+  string content = 2;
+}
 
 message NodeInfo {
   string host = 1;
   int32 port = 2;
 }
 
-message FamilyView {
-  repeated NodeInfo members = 1;
+message JoinRequest {
+  NodeInfo node = 1;
 }
 
-message Empty {}
-
-message ChatMessage {
-  string text = 1;
-  string fromHost = 2;
-  int32 fromPort = 3;
-  int64 timestamp = 4;
+message JoinResponse {
+  bool success = 1;
+  string message = 2;
 }
 
-service FamilyService {
-  rpc Join (NodeInfo) returns (FamilyView);
-  rpc GetFamily (Empty) returns (FamilyView);
+message HeartbeatRequest {
+  int32 port = 1;
+  int32 file_count = 2;
+}
 
-  rpc ReceiveChat (ChatMessage) returns (Empty);
+message HeartbeatResponse {
+  bool success = 1;
 }

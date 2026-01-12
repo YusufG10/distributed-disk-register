@@ -1,7 +1,5 @@
 package com.example.family;
 
-import family.NodeInfo;
-
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;

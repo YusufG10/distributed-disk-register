@@ -5,8 +5,7 @@ import io.grpc.ManagedChannelBuilder;
 
 public class ReadTest {
     public static void main(String[] args) {
-        // DİKKAT: İsteği 50052 portuna (yani İkinci Sunucuya) atıyoruz!
-        // Veriyi 50051'e yazmıştık. Eğer 50052 cevap verirse replikasyon çalışıyor demektir.
+        
         int targetPort = 50052;
 
         System.out.println("Okuma Testi (" + targetPort + ") Başlıyor...");

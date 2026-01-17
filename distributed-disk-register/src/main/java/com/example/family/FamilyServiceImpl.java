@@ -38,33 +38,77 @@ public class FamilyServiceImpl extends FamilyServiceGrpc.FamilyServiceImplBase {
     }
 
     @Override
-    public void store(StoreRequest req, StreamObserver<StoreResponse> resObs) {
-        String path = DATA_DIR_PREFIX + serverPort + File.separator + req.getMessageId() + ".txt";
-        boolean success = false;
-        try (FileWriter fw = new FileWriter(path)) {
-            fw.write(req.getContent());
-            success = true;
-            fileLocationMap.computeIfAbsent(req.getMessageId(), k -> new ArrayList<>()).add(serverPort);
-        } catch (IOException e) { e.printStackTrace(); }
+public void store(StoreRequest req, StreamObserver<StoreResponse> responseObserver) {
 
-        if (success && !req.getIsReplication()) {
-            List<NodeInfo> nodes = new ArrayList<>(nodeRegistry.snapshot());
-            Collections.shuffle(nodes);
-            int targets = Math.min(toleranceValue, nodes.size());
-            for (int i = 0; i < targets; i++) {
-                NodeInfo n = nodes.get(i);
-                try {
-                    ManagedChannel ch = ManagedChannelBuilder.forAddress(n.getHost(), n.getPort()).usePlaintext().build();
-                    FamilyServiceGrpc.newBlockingStub(ch).store(StoreRequest.newBuilder()
-                            .setMessageId(req.getMessageId()).setContent(req.getContent()).setIsReplication(true).build());
-                    fileLocationMap.get(req.getMessageId()).add(n.getPort());
-                    ch.shutdown();
-                } catch (Exception e) { System.out.println("Replikasyon hatası: " + n.getPort()); }
+    String messageId = req.getMessageId();
+    String content = req.getContent();
+    boolean isReplication = req.getIsReplication();
+
+    boolean localSaveSuccess = saveToDisk(messageId, content);
+
+    boolean finalSuccess = localSaveSuccess;
+
+    if (!isReplication && localSaveSuccess) {
+
+        List<NodeInfo> allNodes = nodeRegistry.snapshot();
+        Collections.shuffle(allNodes);
+
+        int targets = Math.min(toleranceValue, allNodes.size());
+        List<NodeInfo> selectedNodes = allNodes.subList(0, targets);
+
+        int successfulReplications = 0;
+
+        for (NodeInfo node : selectedNodes) {
+            try {
+                ManagedChannel ch = ManagedChannelBuilder
+                        .forAddress(node.getHost(), node.getPort())
+                        .usePlaintext()
+                        .build();
+
+                FamilyServiceGrpc.FamilyServiceBlockingStub stub =
+                        FamilyServiceGrpc.newBlockingStub(ch);
+
+                StoreResponse resp = stub.store(
+                        StoreRequest.newBuilder()
+                                .setMessageId(messageId)
+                                .setContent(content)
+                                .setIsReplication(true)
+                                .build()
+                );
+
+                if (resp.getSuccess()) {
+                    successfulReplications++;
+                }
+
+                ch.shutdown();
+
+            } catch (Exception e) {
+                System.err.println("Replikasyon başarısız: " + node.getPort());
             }
         }
-        resObs.onNext(StoreResponse.newBuilder().setSuccess(success).setMessage(success ? "OK" : "ERROR").build());
-        resObs.onCompleted();
+
+        finalSuccess = successfulReplications == targets;
+
+        if (finalSuccess) {
+            fileLocationMap.putIfAbsent(messageId, new ArrayList<>());
+            fileLocationMap.get(messageId).add(serverPort);
+            for (NodeInfo n : selectedNodes) {
+                fileLocationMap.get(messageId).add(n.getPort());
+            }
+        }
     }
+
+    StoreResponse response = StoreResponse.newBuilder()
+            .setSuccess(finalSuccess)
+            .setMessage(finalSuccess
+                    ? "Veri tolerance kadar node'a başarıyla kaydedildi."
+                    : "Tolerance şartı sağlanamadı.")
+            .build();
+
+    responseObserver.onNext(response);
+    responseObserver.onCompleted();
+}
+
 
     @Override
     public void get(GetRequest req, StreamObserver<GetResponse> resObs) {
